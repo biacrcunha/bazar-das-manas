@@ -11,3 +11,91 @@ generator client {
 datasource db {
   provider = "mysql"
 }
+
+// ---------- Tipos ----------
+
+enum Papel {
+  MEMBRO
+  ADMIN
+}
+
+enum StatusItem {
+  DISPONIVEL
+  RESERVADO
+  VENDIDO
+  REMOVIDO
+}
+
+// ---------- Tabelas ----------
+
+model Usuaria {
+  id        Int      @id @default(autoincrement())
+  nome      String   @db.VarChar(80)
+  celular   String   @unique @db.VarChar(20)
+  senhaHash String
+  papel     Papel    @default(MEMBRO)
+  criadoEm  DateTime @default(now())
+
+  itensAnunciados Item[]       @relation("ItensDaVendedora")
+  itensReservados Item[]       @relation("ItensReservados")
+  filas           FilaEspera[]
+  convitesCriados Convite[]    @relation("ConvitesCriados")
+  conviteUsado    Convite?     @relation("ConviteUsado")
+}
+
+model Convite {
+  codigo      String   @id @db.VarChar(32)
+  criadoPorId Int
+  usadoPorId  Int?     @unique
+  expiraEm    DateTime
+  criadoEm    DateTime @default(now())
+
+  criadoPor Usuaria  @relation("ConvitesCriados", fields: [criadoPorId], references: [id])
+  usadoPor  Usuaria? @relation("ConviteUsado", fields: [usadoPorId], references: [id])
+}
+
+model Item {
+  id                  Int        @id @default(autoincrement())
+  vendedoraId         Int
+  titulo              String     @db.VarChar(100)
+  descricao           String?    @db.Text
+  precoCentavos       Int
+  prazoReservaHoras   Int        @default(24)
+  exigePagamentoNoDia Boolean    @default(false)
+  status              StatusItem @default(DISPONIVEL)
+  reservadoPorId      Int?
+  reservadoEm         DateTime?
+  criadoEm            DateTime   @default(now())
+  atualizadoEm        DateTime   @updatedAt
+
+  vendedora    Usuaria      @relation("ItensDaVendedora", fields: [vendedoraId], references: [id])
+  reservadoPor Usuaria?     @relation("ItensReservados", fields: [reservadoPorId], references: [id])
+  fotos        FotoItem[]
+  fila         FilaEspera[]
+
+  @@index([status, criadoEm])
+}
+
+model FotoItem {
+  id     Int    @id @default(autoincrement())
+  itemId Int
+  url    String @db.VarChar(500)
+  ordem  Int
+
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, ordem])
+}
+
+model FilaEspera {
+  itemId    Int
+  usuariaId Int
+  // milissegundos: define a ordem exata de quem clicou primeiro
+  entrouEm  DateTime @default(now()) @db.DateTime(3)
+
+  item    Item    @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  usuaria Usuaria @relation(fields: [usuariaId], references: [id])
+
+  @@id([itemId, usuariaId])
+  @@index([itemId, entrouEm])
+}
